@@ -1,17 +1,17 @@
 services:
-  ecommerce-app:
+  ecom-app:
     build:
       context: .
       dockerfile: Dockerfile.server-sim
     image: spring-ecommerce:latest
-    container_name: ecommerce-app
+    container_name: ecom-app
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: jdbc:postgresql://ecommerce-db:5432/ecommercedb
+      DB_URL: jdbc:postgresql://ecom-db:5432/ecommercedb
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      REDIS_HOST: ecommerce-redis
+      REDIS_HOST: ecom-redis
       REDIS_PORT: 6379
       JAVA_TOOL_OPTIONS: >-
         -Xms256m -Xmx512m
@@ -28,9 +28,9 @@ services:
         limits:
           memory: 768M
 
-  ecommerce-db:
+  ecom-db:
     image: postgres:16-alpine
-    container_name: ecommerce-db
+    container_name: ecom-db
     restart: unless-stopped
     environment:
       POSTGRES_DB: ecommercedb
@@ -38,7 +38,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     command: postgres -c max_connections=100 -c shared_buffers=128MB
     volumes:
-      - ecommerce_pgdata:/var/lib/postgresql/data
+      - ecom_pgdata:/var/lib/postgresql/data
     networks:
       - ecommerce-network
     deploy:
@@ -46,9 +46,9 @@ services:
         limits:
           memory: 256M
 
-  ecommerce-redis:
+  ecom-redis:
     image: redis:7-alpine
-    container_name: ecommerce-redis
+    container_name: ecom-redis
     restart: unless-stopped
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save ""
     networks:
@@ -64,4 +64,4 @@ networks:
     name: e-commerce_ecommerce-network
 
 volumes:
-  ecommerce_pgdata:
+  ecom_pgdata:
