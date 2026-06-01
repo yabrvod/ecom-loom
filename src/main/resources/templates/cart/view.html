@@ -34,13 +34,14 @@
              th:text="${'$' + #numbers.formatInteger(item.price, 0, 'COMMA')}"></p>
         </div>
 
-        <!-- Cantidad -->
-        <form th:action="@{/carrito/actualizar}" method="post" class="flex items-center gap-2">
+        <!-- Cantidad con botones +/- para evitar doble submit del onchange -->
+        <form th:action="@{/carrito/actualizar}" method="post" class="flex items-center gap-1">
           <input type="hidden" name="variantId" th:value="${item.variantId}"/>
-          <input type="number" name="quantity" th:value="${item.quantity}"
-                 min="1" max="99"
-                 class="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-center"
-                 onchange="this.form.submit()"/>
+          <button type="submit" name="quantity" th:value="${item.quantity - 1}"
+                  class="w-7 h-7 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 text-sm font-bold">−</button>
+          <span class="w-8 text-center text-sm font-medium" th:text="${item.quantity}"></span>
+          <button type="submit" name="quantity" th:value="${item.quantity + 1}"
+                  class="w-7 h-7 border border-gray-300 rounded text-gray-600 hover:bg-gray-100 text-sm font-bold">+</button>
         </form>
 
         <!-- Subtotal -->
@@ -49,7 +50,8 @@
 
         <!-- Eliminar -->
         <form th:action="@{/carrito/eliminar/{vid}(vid=${item.variantId})}" method="post">
-          <button type="submit" class="text-red-400 hover:text-red-600 text-xl">✕</button>
+          <button type="submit" class="text-red-400 hover:text-red-600 text-xl"
+                  onclick="this.disabled=true; this.form.submit()">✕</button>
         </form>
       </div>
     </div>
