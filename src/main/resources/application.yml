@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: spring-ecommerce
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/ecommercedb}
+    username: ${DB_USER:ecommerceuser}
+    password: ${DB_PASSWORD:ecommercepass}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 10
+      connection-timeout: 10000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      timeout: 2000
+
+  session:
+    store-type: redis
+    timeout: 60m
+    redis:
+      namespace: spring:session:ecommerce
+
+  thymeleaf:
+    cache: false
+    prefix: file:src/main/resources/templates/
+    suffix: .html
+
+  devtools:
+    restart:
+      enabled: false   # Inestable en Windows — usar mvn compile + restart manual
+    livereload:
+      enabled: false
+
+server:
+  port: 8090
+  error:
+    include-message: always
+
+management:
+  server:
+    port: 8091
+    address: 127.0.0.1
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,caches

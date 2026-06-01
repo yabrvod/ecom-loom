@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head><title>Admin</title></head>
+<body>
+<div layout:fragment="content">
+
+  <h1 class="text-2xl font-bold text-gray-900 mb-8">Panel de administración</h1>
+
+  <!-- KPIs — jOOQ -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide">Productos activos</p>
+      <p class="text-3xl font-bold text-indigo-600 mt-1" th:text="${stats.totalProducts}">0</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide">Órdenes hoy</p>
+      <p class="text-3xl font-bold text-green-600 mt-1" th:text="${stats.ordersToday}">0</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide">Venta total</p>
+      <p class="text-3xl font-bold text-gray-800 mt-1"
+         th:text="${'$' + #numbers.formatInteger(stats.totalRevenue ?: 0, 0, 'COMMA')}">$0</p>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+      <p class="text-xs text-gray-400 uppercase tracking-wide">Usuarios</p>
+      <p class="text-3xl font-bold text-purple-600 mt-1" th:text="${stats.totalUsers}">0</p>
+    </div>
+  </div>
+
+  <!-- Órdenes recientes — jOOQ -->
+  <div class="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8">
+    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+      <h2 class="font-bold text-gray-800">Órdenes recientes</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+        <tr>
+          <th class="px-6 py-3 text-left">#</th>
+          <th class="px-6 py-3 text-left">Usuario</th>
+          <th class="px-6 py-3 text-left">Total</th>
+          <th class="px-6 py-3 text-left">Estado</th>
+          <th class="px-6 py-3 text-left">Fecha</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr th:each="o : ${recentOrders}" class="hover:bg-gray-50">
+          <td class="px-6 py-3 font-medium" th:text="${o.id}"></td>
+          <td class="px-6 py-3 text-gray-600" th:text="${o.username ?: 'Anónimo'}"></td>
+          <td class="px-6 py-3 font-semibold"
+              th:text="${'$' + #numbers.formatInteger(o.total, 0, 'COMMA')}"></td>
+          <td class="px-6 py-3">
+            <span class="px-2 py-1 rounded-full text-xs font-medium"
+                  th:classappend="${o.status == 'CONFIRMED'} ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'"
+                  th:text="${o.status}"></span>
+          </td>
+          <td class="px-6 py-3 text-gray-500"
+              th:text="${#temporals.format(o.createdAt, 'dd/MM/yyyy HH:mm')}"></td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(recentOrders)}">
+          <td colspan="5" class="px-6 py-8 text-center text-gray-400">Sin órdenes aún</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Stock bajo — jOOQ -->
+  <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="font-bold text-gray-800">Stock bajo (≤ 5 unidades)</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+        <tr>
+          <th class="px-6 py-3 text-left">Producto</th>
+          <th class="px-6 py-3 text-left">Variante</th>
+          <th class="px-6 py-3 text-left">SKU</th>
+          <th class="px-6 py-3 text-left">Stock</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr th:each="v : ${lowStock}" class="hover:bg-gray-50">
+          <td class="px-6 py-3" th:text="${v.productName}"></td>
+          <td class="px-6 py-3 text-gray-600" th:text="${v.variantName}"></td>
+          <td class="px-6 py-3 text-gray-400 font-mono text-xs" th:text="${v.sku}"></td>
+          <td class="px-6 py-3">
+            <span class="font-bold"
+                  th:classappend="${v.stock == 0} ? 'text-red-600' : 'text-orange-500'"
+                  th:text="${v.stock}"></span>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(lowStock)}">
+          <td colspan="4" class="px-6 py-8 text-center text-gray-400">Todo el stock está bien ✓</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

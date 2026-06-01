@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head><title>Ingresar</title></head>
+<body>
+<div layout:fragment="content">
+  <div class="max-w-sm mx-auto mt-8">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6 text-center">Ingresar</h1>
+
+    <div th:if="${param.error}"
+         class="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-3 mb-4">
+      Usuario o contraseña incorrectos.
+    </div>
+    <div th:if="${param.logout}"
+         class="bg-green-50 border border-green-200 text-green-600 text-sm rounded-lg p-3 mb-4">
+      Sesión cerrada correctamente.
+    </div>
+
+    <form th:action="@{/login}" method="post"
+          class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+        <input type="text" name="username" autofocus required
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+        <input type="password" name="password" required
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+      </div>
+      <button type="submit"
+              class="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg hover:bg-indigo-700">
+        Ingresar
+      </button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

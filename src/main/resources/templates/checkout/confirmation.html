@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head><title>Pedido confirmado</title></head>
+<body>
+<div layout:fragment="content">
+  <div class="max-w-2xl mx-auto">
+
+    <div class="text-center mb-8">
+      <div class="text-6xl mb-4">✅</div>
+      <h1 class="text-2xl font-bold text-gray-900">¡Pedido confirmado!</h1>
+      <p class="text-gray-500 mt-2">Orden #<span th:text="${order.id}"></span></p>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h2 class="font-bold text-gray-800 mb-4">Detalle del pedido</h2>
+
+      <div th:each="item : ${order.items}"
+           class="flex justify-between items-center py-3 border-b border-gray-100 last:border-0">
+        <div>
+          <p class="font-medium text-sm" th:text="${item.productName}"></p>
+          <p class="text-xs text-gray-500" th:text="${item.variantName + ' × ' + item.quantity}"></p>
+        </div>
+        <p class="font-semibold text-sm"
+           th:text="${'$' + #numbers.formatInteger(item.subtotal, 0, 'COMMA')}"></p>
+      </div>
+
+      <div class="flex justify-between items-center pt-4 font-bold text-lg">
+        <span>Total</span>
+        <span class="text-indigo-600"
+              th:text="${'$' + #numbers.formatInteger(order.total, 0, 'COMMA')}"></span>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-6 mb-6">
+      <h2 class="font-bold text-gray-800 mb-3">Envío</h2>
+      <p class="text-sm text-gray-700" th:text="${order.shippingName}"></p>
+      <p class="text-sm text-gray-500" th:text="${order.shippingAddress}"></p>
+    </div>
+
+    <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center text-sm text-green-700 mb-6">
+      Pago aprobado · Método: <span th:text="${order.payment?.method}">SIMULATED</span>
+    </div>
+
+    <div class="text-center">
+      <a th:href="@{/}" class="bg-indigo-600 text-white px-6 py-3 rounded-lg hover:bg-indigo-700">
+        Seguir comprando
+      </a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

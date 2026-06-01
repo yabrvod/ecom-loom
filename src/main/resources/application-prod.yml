@@ -1,0 +1,19 @@
+spring:
+  thymeleaf:
+    cache: true
+    prefix: classpath:/templates/
+
+  jpa:
+    show-sql: false
+    open-in-view: false
+
+  devtools:
+    restart:
+      enabled: false
+    livereload:
+      enabled: false
+
+server:
+  forward-headers-strategy: framework
+  compression:
+    enabled: false

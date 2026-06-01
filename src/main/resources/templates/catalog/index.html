@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head><title>Catálogo</title></head>
+<body>
+<div layout:fragment="content">
+
+  <!-- Filtros -->
+  <form th:action="@{/}" method="get" class="flex flex-wrap gap-3 mb-8 items-end">
+    <div class="flex-1 min-w-48">
+      <label class="block text-xs text-gray-500 mb-1">Buscar</label>
+      <input type="text" name="q" th:value="${q}"
+             placeholder="Nombre o descripción..."
+             class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-500 mb-1">Categoría</label>
+      <select name="category" class="border border-gray-300 rounded px-3 py-2 text-sm">
+        <option value="">Todas</option>
+        <option th:each="cat : ${categories}"
+                th:value="${cat.slug}" th:text="${cat.name}"
+                th:selected="${cat.slug == category}"></option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs text-gray-500 mb-1">Precio máximo</label>
+      <input type="number" name="maxPrice" th:value="${maxPrice}"
+             placeholder="Sin límite"
+             class="w-32 border border-gray-300 rounded px-3 py-2 text-sm"/>
+    </div>
+    <button type="submit"
+            class="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">
+      Buscar
+    </button>
+    <a th:href="@{/}" class="text-sm text-gray-500 hover:underline py-2">Limpiar</a>
+  </form>
+
+  <!-- Resultados -->
+  <div class="flex items-center justify-between mb-4">
+    <p class="text-sm text-gray-500">
+      <span th:text="${total}"></span> productos encontrados
+    </p>
+  </div>
+
+  <div th:if="${#lists.isEmpty(products)}"
+       class="text-center py-16 text-gray-400">
+    <p class="text-4xl mb-3">🔍</p>
+    <p>No se encontraron productos</p>
+  </div>
+
+  <!-- Grid productos -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    <a th:each="p : ${products}"
+       th:href="@{/productos/{slug}(slug=${p.slug})}"
+       class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+
+      <!-- Imagen placeholder -->
+      <div class="bg-gradient-to-br from-indigo-50 to-purple-50 h-48 flex items-center justify-center text-5xl">
+        🛍
+      </div>
+
+      <div class="p-4">
+        <p class="text-xs text-indigo-500 font-medium mb-1" th:text="${p.categoryName}"></p>
+        <h3 class="font-semibold text-gray-800 group-hover:text-indigo-600 transition-colors"
+            th:text="${p.name}"></h3>
+        <div class="flex items-center justify-between mt-3">
+          <span class="text-lg font-bold text-gray-900"
+                th:text="${'$' + #numbers.formatInteger(p.basePrice, 0, 'COMMA')}"></span>
+          <span th:if="${p.inStock}"
+                class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">En stock</span>
+          <span th:unless="${p.inStock}"
+                class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Sin stock</span>
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Paginación -->
+  <div th:if="${totalPages > 1}" class="flex justify-center gap-2 mt-10">
+    <a th:if="${page > 0}"
+       th:href="@{/(q=${q},category=${category},maxPrice=${maxPrice},page=${page-1})}"
+       class="px-4 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">← Anterior</a>
+    <span class="px-4 py-2 text-sm text-gray-600">
+      Página <span th:text="${page + 1}"></span> de <span th:text="${totalPages}"></span>
+    </span>
+    <a th:if="${page + 1 < totalPages}"
+       th:href="@{/(q=${q},category=${category},maxPrice=${maxPrice},page=${page+1})}"
+       class="px-4 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">Siguiente →</a>
+  </div>
+
+</div>
+</body>
+</html>

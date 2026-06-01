@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-db
+    environment:
+      POSTGRES_DB: ecommercedb
+      POSTGRES_USER: ecommerceuser
+      POSTGRES_PASSWORD: ecommercepass
+    ports:
+      - "5433:5432"
+    volumes:
+      - ecommerce_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecommerceuser -d ecommercedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    ports:
+      - "6380:6379"
+    command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save ""
+
+volumes:
+  ecommerce_pgdata:
