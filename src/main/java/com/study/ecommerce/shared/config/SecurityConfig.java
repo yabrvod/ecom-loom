@@ -11,6 +11,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
 @EnableWebSecurity
@@ -18,11 +20,21 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        // CSRF via cookie — funciona correctamente con Cloudflare como reverse proxy
+        // CookieCsrfTokenRepository pone el token en una cookie accesible por JS
+        // y lo lee del header X-XSRF-TOKEN o del form field _csrf
+        var csrfRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        var csrfHandler = new CsrfTokenRequestAttributeHandler();
+
         http
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(csrfRepo)
+                .csrfTokenRequestHandler(csrfHandler)
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/admin/**").hasRole("ADMIN")
-                .requestMatchers("/ordenes/**").authenticated()  // historial requiere cuenta
-                .anyRequest().permitAll()                        // catálogo, carrito, checkout → todos
+                .requestMatchers("/ordenes/**").authenticated()
+                .anyRequest().permitAll()
             )
             .formLogin(form -> form
                 .loginPage("/login")
