@@ -30,13 +30,11 @@ public class CartController {
     @GetMapping
     public String view(@AuthenticationPrincipal UserDetails user,
                        HttpSession session, Model model) {
-        var cart = resolveCart(user, session);
-        var items = cartService.getEnrichedItems(cart);
-        model.addAttribute("cart", cart);
+        Long cartId = resolveCartId(user, session);
+        var items = cartService.getEnrichedItems(cartId);
+        var total = cartService.calcTotal(items);
         model.addAttribute("items", items);
-        model.addAttribute("total", items.stream()
-            .map(i -> i.getSubtotal())
-            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        model.addAttribute("total", total);
         return "cart/view";
     }
 
@@ -44,20 +42,9 @@ public class CartController {
     public String addItem(@RequestParam Long variantId,
                           @RequestParam(defaultValue = "1") int quantity,
                           @AuthenticationPrincipal UserDetails user,
-                          HttpSession session,
-                          RedirectAttributes redirect) {
-        var cart = resolveCart(user, session);
-        cartService.addItem(cart.getId(), variantId, quantity);
-        redirect.addFlashAttribute("mensaje", "Producto agregado al carrito");
-        return "redirect:/carrito";
-    }
-
-    @PostMapping("/eliminar/{variantId}")
-    public String removeItem(@PathVariable Long variantId,
-                             @AuthenticationPrincipal UserDetails user,
-                             HttpSession session) {
-        var cart = resolveCart(user, session);
-        cartService.removeItem(cart.getId(), variantId);
+                          HttpSession session) {
+        Long cartId = resolveCartId(user, session);
+        cartService.addItem(cartId, variantId, quantity);
         return "redirect:/carrito";
     }
 
@@ -66,8 +53,17 @@ public class CartController {
                                  @RequestParam int quantity,
                                  @AuthenticationPrincipal UserDetails user,
                                  HttpSession session) {
-        var cart = resolveCart(user, session);
-        cartService.updateQuantity(cart.getId(), variantId, quantity);
+        Long cartId = resolveCartId(user, session);
+        cartService.updateQuantity(cartId, variantId, quantity);
+        return "redirect:/carrito";
+    }
+
+    @PostMapping("/eliminar/{variantId}")
+    public String removeItem(@PathVariable Long variantId,
+                             @AuthenticationPrincipal UserDetails user,
+                             HttpSession session) {
+        Long cartId = resolveCartId(user, session);
+        cartService.removeItem(cartId, variantId);
         return "redirect:/carrito";
     }
 
@@ -77,12 +73,12 @@ public class CartController {
                            @AuthenticationPrincipal UserDetails user,
                            HttpSession session,
                            RedirectAttributes redirect) {
-        var cart = resolveCart(user, session);
+        Long cartId = resolveCartId(user, session);
         Long userId = user != null
             ? userRepository.findByUsername(user.getUsername()).map(u -> u.getId()).orElse(null)
             : null;
         try {
-            var order = checkoutService.checkout(cart.getId(), userId, shippingName, shippingAddress);
+            var order = checkoutService.checkout(cartId, userId, shippingName, shippingAddress);
             return "redirect:/checkout/confirmacion/" + order.getConfirmationToken();
         } catch (BusinessException e) {
             redirect.addFlashAttribute("error", e.getMessage());
@@ -90,18 +86,14 @@ public class CartController {
         }
     }
 
-    private com.study.ecommerce.cart.domain.Cart resolveCart(UserDetails user, HttpSession session) {
+    private Long resolveCartId(UserDetails user, HttpSession session) {
         if (user != null) {
-            // Usuario autenticado: carrito persistido por userId
-            // Al hacer login se fusiona el carrito anónimo (sessionId) si existía
             Long userId = userRepository.findByUsername(user.getUsername())
-                .map(u -> u.getId())
-                .orElse(null);
+                .map(u -> u.getId()).orElse(null);
             if (userId != null) {
-                var cart = cartService.getOrCreateForUser(userId);
-                // Fusionar carrito anónimo si existe
-                cartService.mergeSessionCart(session.getId(), cart);
-                return cart;
+                Long cartId = cartService.getOrCreateForUser(userId);
+                cartService.mergeSessionCart(session.getId(), cartId);
+                return cartId;
             }
         }
         return cartService.getOrCreateForSession(session.getId());

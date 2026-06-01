@@ -1,118 +1,175 @@
 package com.study.ecommerce.cart.service;
 
-import com.study.ecommerce.cart.domain.Cart;
 import com.study.ecommerce.cart.domain.CartItemView;
-import com.study.ecommerce.cart.repository.CartRepository;
-import com.study.ecommerce.shared.exception.ResourceNotFoundException;
 import org.jooq.DSLContext;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.jooq.impl.DSL.*;
 
+/**
+ * CartService migrado de Hibernate a jOOQ + JDBC.
+ * Elimina el overhead de sesión JPA, dirty checking y proxy generation.
+ * Cada operación es una query directa — equivalente al cartService.js de Node.
+ */
 @Service
 public class CartService {
 
-    private final CartRepository cartRepository;
     private final DSLContext dsl;
+    private final NamedParameterJdbcTemplate jdbc;
 
-    public CartService(CartRepository cartRepository, DSLContext dsl) {
-        this.cartRepository = cartRepository;
+    public CartService(DSLContext dsl, NamedParameterJdbcTemplate jdbc) {
         this.dsl = dsl;
+        this.jdbc = jdbc;
     }
 
     @Transactional
-    public Cart getOrCreateForUser(Long userId) {
-        return cartRepository.findByUserId(userId)
-            .orElseGet(() -> {
-                Cart c = new Cart();
-                c.setUserId(userId);
-                return cartRepository.save(c);
-            });
+    public Long getOrCreateForSession(String sessionId) {
+        var existing = dsl.select(field("id"))
+            .from(table("carts"))
+            .where(field("session_id").eq(sessionId))
+            .fetchOne();
+        if (existing != null) return existing.get(field("id", Long.class));
+
+        return dsl.insertInto(table("carts"))
+            .set(field("session_id"), sessionId)
+            .returning(field("id"))
+            .fetchOne()
+            .get(field("id", Long.class));
     }
 
     @Transactional
-    public Cart getOrCreateForSession(String sessionId) {
-        return cartRepository.findBySessionId(sessionId)
-            .orElseGet(() -> {
-                Cart c = new Cart();
-                c.setSessionId(sessionId);
-                return cartRepository.save(c);
-            });
+    public Long getOrCreateForUser(Long userId) {
+        var existing = dsl.select(field("id"))
+            .from(table("carts"))
+            .where(field("user_id").eq(userId))
+            .fetchOne();
+        if (existing != null) return existing.get(field("id", Long.class));
+
+        return dsl.insertInto(table("carts"))
+            .set(field("user_id"), userId)
+            .returning(field("id"))
+            .fetchOne()
+            .get(field("id", Long.class));
     }
 
     @Transactional
-    public Cart addItem(Long cartId, Long variantId, int quantity) {
-        Cart cart = cartRepository.findWithItemsById(cartId)
-            .orElseThrow(() -> new ResourceNotFoundException("Carrito no encontrado: " + cartId));
-        cart.addItem(variantId, quantity);
-        return cart;
+    public void addItem(Long cartId, Long variantId, int quantity) {
+        jdbc.update("""
+            INSERT INTO cart_items (cart_id, variant_id, quantity)
+            VALUES (:cartId, :variantId, :qty)
+            ON CONFLICT (cart_id, variant_id)
+            DO UPDATE SET quantity = cart_items.quantity + :qty
+            """, new MapSqlParameterSource()
+            .addValue("cartId", cartId)
+            .addValue("variantId", variantId)
+            .addValue("qty", quantity));
+
+        jdbc.update("UPDATE carts SET updated_at = NOW() WHERE id = :id",
+            new MapSqlParameterSource("id", cartId));
     }
 
     @Transactional
-    public Cart removeItem(Long cartId, Long variantId) {
-        Cart cart = cartRepository.findWithItemsById(cartId)
-            .orElseThrow(() -> new ResourceNotFoundException("Carrito no encontrado: " + cartId));
-        cart.removeItem(variantId);
-        return cart;
+    public void removeItem(Long cartId, Long variantId) {
+        jdbc.update("DELETE FROM cart_items WHERE cart_id = :cartId AND variant_id = :variantId",
+            new MapSqlParameterSource()
+                .addValue("cartId", cartId)
+                .addValue("variantId", variantId));
     }
 
     @Transactional
-    public Cart updateQuantity(Long cartId, Long variantId, int quantity) {
-        Cart cart = cartRepository.findById(cartId)
-            .orElseThrow(() -> new ResourceNotFoundException("Carrito no encontrado: " + cartId));
-        cart.updateQuantity(variantId, quantity);
-        return cart;
+    public void updateQuantity(Long cartId, Long variantId, int quantity) {
+        if (quantity <= 0) {
+            removeItem(cartId, variantId);
+            return;
+        }
+        jdbc.update("UPDATE cart_items SET quantity = :qty WHERE cart_id = :cartId AND variant_id = :variantId",
+            new MapSqlParameterSource()
+                .addValue("qty", quantity)
+                .addValue("cartId", cartId)
+                .addValue("variantId", variantId));
     }
 
-    // Enriquecer items del carrito con nombre y precio via jOOQ
+    // Enriquecer items con nombre y precio via jOOQ (una sola query con JOIN)
     @Transactional(readOnly = true)
-    public List<CartItemView> getEnrichedItems(Cart cart) {
-        if (cart.getItems().isEmpty()) return List.of();
-
-        var variantIds = cart.getItems().stream()
-            .map(i -> i.getVariantId())
-            .collect(Collectors.toList());
-
-        var variantData = dsl.select(
-                    field("v.id").as("variantId"),
-                    field("p.name", String.class).as("productName"),
-                    field("v.name", String.class).as("variantName"),
-                    field("v.price", BigDecimal.class).as("price")
+    public List<CartItemView> getEnrichedItems(Long cartId) {
+        return dsl.select(
+                    field("ci.variant_id"),
+                    field("ci.quantity"),
+                    field("p.name", String.class),
+                    field("v.name", String.class),
+                    field("v.price", BigDecimal.class)
                 )
-                .from(table("product_variants").as("v"))
+                .from(table("cart_items").as("ci"))
+                .join(table("product_variants").as("v")).on(field("v.id").eq(field("ci.variant_id")))
                 .join(table("products").as("p")).on(field("p.id").eq(field("v.product_id")))
-                .where(field("v.id").in(variantIds))
-                .fetchMap(field("variantId", Long.class));
-
-        return cart.getItems().stream().map(item -> {
-            var view = new CartItemView();
-            view.variantId = item.getVariantId();
-            view.quantity = item.getQuantity();
-            var data = variantData.get(item.getVariantId());
-            if (data != null) {
-                view.productName = data.get("productName", String.class);
-                view.variantName = data.get("variantName", String.class);
-                view.price = data.get("price", BigDecimal.class);
-            }
-            return view;
-        }).collect(Collectors.toList());
+                .where(field("ci.cart_id").eq(cartId))
+                .fetch(r -> {
+                    CartItemView v = new CartItemView();
+                    v.variantId    = r.get(0, Long.class);
+                    v.quantity     = r.get(1, Integer.class);
+                    v.productName  = r.get(2, String.class);
+                    v.variantName  = r.get(3, String.class);
+                    v.price        = r.get(4, BigDecimal.class);
+                    return v;
+                });
     }
 
-    // Fusiona el carrito anónimo (sessionId) al carrito del usuario al hacer login
+    @Transactional(readOnly = true)
+    public boolean isEmpty(Long cartId) {
+        return dsl.selectCount()
+            .from(table("cart_items"))
+            .where(field("cart_id").eq(cartId))
+            .fetchOne(0, int.class) == 0;
+    }
+
+    @Transactional(readOnly = true)
+    public int totalItems(Long cartId) {
+        Integer total = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(quantity),0) FROM cart_items WHERE cart_id = :id",
+            new MapSqlParameterSource("id", cartId), Integer.class);
+        return total != null ? total : 0;
+    }
+
     @Transactional
-    public void mergeSessionCart(String sessionId, Cart userCart) {
-        cartRepository.findBySessionId(sessionId).ifPresent(sessionCart -> {
-            if (!sessionCart.getId().equals(userCart.getId())) {
-                sessionCart.getItems().forEach(item ->
-                    userCart.addItem(item.getVariantId(), item.getQuantity())
-                );
-                cartRepository.delete(sessionCart);
-            }
-        });
+    public void clearCart(Long cartId) {
+        jdbc.update("DELETE FROM carts WHERE id = :id",
+            new MapSqlParameterSource("id", cartId));
+    }
+
+    @Transactional
+    public void mergeSessionCart(String sessionId, Long userCartId) {
+        Long sessionCartId = dsl.select(field("id"))
+            .from(table("carts"))
+            .where(field("session_id").eq(sessionId))
+            .fetchOneInto(Long.class);
+
+        if (sessionCartId == null || sessionCartId.equals(userCartId)) return;
+
+        // Fusionar items del carrito anónimo al carrito del usuario
+        jdbc.update("""
+            INSERT INTO cart_items (cart_id, variant_id, quantity)
+            SELECT :userCartId, variant_id, quantity FROM cart_items WHERE cart_id = :sessionCartId
+            ON CONFLICT (cart_id, variant_id)
+            DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
+            """, new MapSqlParameterSource()
+            .addValue("userCartId", userCartId)
+            .addValue("sessionCartId", sessionCartId));
+
+        jdbc.update("DELETE FROM carts WHERE id = :id",
+            new MapSqlParameterSource("id", sessionCartId));
+    }
+
+    public BigDecimal calcTotal(List<CartItemView> items) {
+        return items.stream()
+            .map(CartItemView::getSubtotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

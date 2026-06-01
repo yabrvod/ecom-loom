@@ -88,4 +88,9 @@ public class Order {
     public Payment getPayment() { return payment; }
     public void setPayment(Payment payment) { this.payment = payment; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    // Setters para construcción desde JDBC (sin Hibernate)
+    public void setId(Long id) { this.id = id; }
+    public void setConfirmationToken(UUID confirmationToken) { this.confirmationToken = confirmationToken; }
+    public void setTotal(java.math.BigDecimal total) { this.total = total; }
 }

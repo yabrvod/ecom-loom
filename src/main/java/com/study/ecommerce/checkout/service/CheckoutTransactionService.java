@@ -1,77 +1,113 @@
 package com.study.ecommerce.checkout.service;
 
-import com.study.ecommerce.cart.domain.Cart;
-import com.study.ecommerce.cart.repository.CartRepository;
+import com.study.ecommerce.cart.service.CartService;
 import com.study.ecommerce.checkout.domain.Order;
-import com.study.ecommerce.checkout.domain.Payment;
-import com.study.ecommerce.checkout.repository.OrderRepository;
-import com.study.ecommerce.shared.exception.BusinessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.study.ecommerce.shared.exception.BusinessException;
 
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.UUID;
 
 /**
- * Fase 2 del checkout — en bean separado para que @Transactional
- * funcione correctamente (Spring AOP no intercepta llamadas internas).
+ * Checkout migrado de Hibernate a JDBC puro.
+ * Elimina el overhead de ORM en el path transaccional más crítico.
+ * Una sola @Transactional con JDBC — sin sesión JPA abierta.
  */
 @Service
 public class CheckoutTransactionService {
 
-    private final CartRepository cartRepository;
-    private final OrderRepository orderRepository;
     private final NamedParameterJdbcTemplate jdbc;
+    private final CartService cartService;
 
-    public CheckoutTransactionService(CartRepository cartRepository,
-                                      OrderRepository orderRepository,
-                                      NamedParameterJdbcTemplate jdbc) {
-        this.cartRepository = cartRepository;
-        this.orderRepository = orderRepository;
+    public CheckoutTransactionService(NamedParameterJdbcTemplate jdbc, CartService cartService) {
         this.jdbc = jdbc;
+        this.cartService = cartService;
     }
 
     @Transactional
-    public Order execute(Cart cart, Long userId, String shippingName,
+    public Order execute(Long cartId, Long userId, String shippingName,
                          String shippingAddress, Map<Long, Map<String, Object>> variantMap) {
 
-        Order order = new Order(userId, shippingName, shippingAddress);
+        // Calcular total
+        BigDecimal total = variantMap.values().stream()
+            .map(v -> (BigDecimal) v.get("price"))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        for (var item : cart.getItems()) {
+        // Calcular total real con cantidades
+        var items = cartService.getEnrichedItems(cartId);
+        total = items.stream()
+            .map(i -> i.getPrice().multiply(BigDecimal.valueOf(i.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        UUID token = UUID.randomUUID();
+
+        // INSERT order
+        var keyHolder = new GeneratedKeyHolder();
+        jdbc.update("""
+            INSERT INTO orders (user_id, status, total, shipping_name, shipping_address, confirmation_token)
+            VALUES (:userId, 'CONFIRMED', :total, :shippingName, :shippingAddress, :token)
+            """, new MapSqlParameterSource()
+            .addValue("userId", userId)
+            .addValue("total", total)
+            .addValue("shippingName", shippingName)
+            .addValue("shippingAddress", shippingAddress)
+            .addValue("token", token),
+            keyHolder, new String[]{"id"});
+
+        Long orderId = keyHolder.getKey().longValue();
+
+        // INSERT order_items + descontar inventario
+        for (var item : items) {
             var data = variantMap.get(item.getVariantId());
+
+            jdbc.update("""
+                INSERT INTO order_items (order_id, variant_id, product_name, variant_name, unit_price, quantity)
+                VALUES (:orderId, :variantId, :productName, :variantName, :unitPrice, :quantity)
+                """, new MapSqlParameterSource()
+                .addValue("orderId", orderId)
+                .addValue("variantId", item.getVariantId())
+                .addValue("productName", item.getProductName())
+                .addValue("variantName", item.getVariantName())
+                .addValue("unitPrice", item.getPrice())
+                .addValue("quantity", item.getQuantity()));
 
             int updated = jdbc.update("""
                 UPDATE inventory SET stock = stock - :qty, updated_at = NOW()
                 WHERE variant_id = :vid AND stock >= :qty
                 """, new MapSqlParameterSource()
-                    .addValue("qty", item.getQuantity())
-                    .addValue("vid", item.getVariantId()));
+                .addValue("qty", item.getQuantity())
+                .addValue("vid", item.getVariantId()));
 
             if (updated == 0)
-                throw new BusinessException("Stock agotado para: " + data.get("product_name"));
-
-            order.addItem(
-                item.getVariantId(),
-                (String) data.get("product_name"),
-                (String) data.get("variant_name"),
-                (BigDecimal) data.get("price"),
-                item.getQuantity()
-            );
+                throw new BusinessException("Stock agotado para: " + item.getProductName());
         }
 
-        Order saved = orderRepository.save(order);
+        // INSERT payment simulado
+        jdbc.update("""
+            INSERT INTO payments (order_id, status, method, amount, processed_at)
+            VALUES (:orderId, 'APPROVED', 'SIMULATED', :amount, NOW())
+            """, new MapSqlParameterSource()
+            .addValue("orderId", orderId)
+            .addValue("amount", total));
 
-        Payment payment = new Payment(saved, saved.getTotal());
-        payment.approve();
-        saved.setPayment(payment);
-        saved.confirm();
+        // Vaciar carrito
+        cartService.clearCart(cartId);
 
-        // Vaciar y eliminar el carrito — dirty checking + delete
-        cart.getItems().clear();
-        cartRepository.delete(cart);
+        // Retornar Order con los datos necesarios para el redirect
+        return buildOrderResult(orderId, token, total, shippingName, shippingAddress);
+    }
 
-        return saved;
+    private Order buildOrderResult(Long id, UUID token, BigDecimal total,
+                                   String shippingName, String shippingAddress) {
+        Order order = new Order(null, shippingName, shippingAddress);
+        order.setId(id);
+        order.setConfirmationToken(token);
+        order.setTotal(total);
+        return order;
     }
 }
