@@ -51,7 +51,7 @@
         <!-- Eliminar -->
         <form th:action="@{/carrito/eliminar/{vid}(vid=${item.variantId})}" method="post">
           <button type="submit" class="text-red-400 hover:text-red-600 text-xl"
-                  onclick="this.disabled=true; this.form.submit()">✕</button>
+                  onclick="setTimeout(() => this.disabled=true, 0)">✕</button>
         </form>
       </div>
     </div>
