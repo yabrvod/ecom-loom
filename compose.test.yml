@@ -1,0 +1,31 @@
+services:
+  ecom-test:
+    image: spring-ecommerce:latest
+    container_name: ecom-test
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://ecom-db:5432/ecommercedb
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: ecom-redis
+      REDIS_PORT: 6379
+      JAVA_TOOL_OPTIONS: >-
+        -Xms256m -Xmx512m
+        -XX:+UseG1GC
+        -XX:MaxGCPauseMillis=100
+        -XX:ActiveProcessorCount=1
+        -Djava.security.egd=file:/dev/./urandom
+    ports:
+      - "127.0.0.1:9095:8090"
+    networks:
+      - ecommerce-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+
+networks:
+  ecommerce-network:
+    external: true
+    name: e-commerce_ecommerce-network
