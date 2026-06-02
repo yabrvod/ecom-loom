@@ -1,55 +1,20 @@
 package com.study.ecommerce.shared.config;
 
-import com.zaxxer.hikari.HikariDataSource;
-import org.crac.Context;
-import org.crac.Core;
-import org.crac.Resource;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import jakarta.annotation.PostConstruct;
 
 /**
- * CRaC Resource handler para HikariCP.
+ * CRaC configuration.
  *
- * Problema sin esto:
- *   El checkpoint guarda conexiones JDBC abiertas.
- *   Al restore, esas conexiones son inválidas → errores de BD.
+ * Con spring-boot-starter-crac, Spring Boot 3.2+ registra automáticamente:
+ *   - HikariCheckpointRestoreLifecycle: cierra/reabre conexiones JDBC
+ *   - RedisConnectionFactoryBeanPostProcessor: maneja conexiones Redis
+ *   - TomcatCRaCLifecycle: pausa/reanuda el servidor HTTP
  *
- * Solución:
- *   beforeCheckpoint → cierra todas las conexiones del pool
- *   afterRestore     → el pool crea conexiones nuevas automáticamente
+ * No se necesita implementación manual — el starter lo hace todo.
+ * Esta clase queda como documentación de la integración.
  */
 @Configuration
-public class CracConfig implements Resource {
-
-    @Autowired
-    private HikariDataSource dataSource;
-
-    @PostConstruct
-    public void registerWithCrac() {
-        // Registrar este bean como Resource de CRaC
-        Core.getGlobalContext().register(this);
-    }
-
-    @Override
-    public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
-        System.out.println("[CRaC] Cerrando pool HikariCP antes del checkpoint...");
-        // Paso 1: soft evict (marca conexiones para cierre)
-        dataSource.getHikariPoolMXBean().softEvictConnections();
-        Thread.sleep(1000);
-        // Paso 2: reducir pool a 0 — fuerza cierre de todas las conexiones
-        dataSource.setMaximumPoolSize(0);
-        dataSource.setMinimumIdle(0);
-        Thread.sleep(2000);
-        System.out.println("[CRaC] Pool cerrado. Conexiones activas: " +
-            dataSource.getHikariPoolMXBean().getActiveConnections());
-    }
-
-    @Override
-    public void afterRestore(Context<? extends Resource> context) throws Exception {
-        // Restaurar pool con configuración original
-        dataSource.setMaximumPoolSize(30);
-        dataSource.setMinimumIdle(5);
-        System.out.println("[CRaC] Restore completado — pool restaurado, conexiones BD se crearán al primer request");
-    }
+public class CracConfig {
+    // Spring Boot starter-crac registra todos los lifecycles necesarios
+    // automáticamente via auto-configuration
 }

@@ -129,7 +129,8 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- CRaC: Checkpoint/Restore — JVM warm snapshot para restart <1s -->
+        <!-- CRaC: org.crac en classpath activa HikariCheckpointRestoreLifecycle
+             automáticamente via Spring Boot auto-configuration (3.2+) -->
         <dependency>
             <groupId>org.crac</groupId>
             <artifactId>crac</artifactId>
