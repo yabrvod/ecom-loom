@@ -5,24 +5,28 @@
 CHECKPOINT_DIR="/app/checkpoint"
 JAVA_OPTS="${JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=75.0 -XX:+UseG1GC}"
 
-if [ -d "$CHECKPOINT_DIR/core" ] && [ -f "$CHECKPOINT_DIR/core/dump4.img" ]; then
+if [ -d "$CHECKPOINT_DIR" ] && [ "$(ls -A $CHECKPOINT_DIR 2>/dev/null)" ]; then
     echo "[CRaC] Restaurando desde checkpoint..."
     exec java $JAVA_OPTS \
         -XX:CRaCRestoreFrom="$CHECKPOINT_DIR" \
         -Dspring.profiles.active="${SPRING_PROFILES_ACTIVE:-prod}"
 else
     echo "[CRaC] Primer arranque — iniciando app para crear checkpoint..."
+    # Lanzar Java con CRaCCheckpointTo apuntando al volumen
     java $JAVA_OPTS \
         -XX:CRaCCheckpointTo="$CHECKPOINT_DIR" \
         -Dspring.profiles.active="${SPRING_PROFILES_ACTIVE:-prod}" \
         -jar /app/app.jar &
 
     APP_PID=$!
+    echo "[CRaC] Java PID: $APP_PID"
 
-    # Esperar que la app arranque (usar curl, no wget)
+    # Esperar que la app arranque
     echo "[CRaC] Esperando arranque..."
     until curl -sf http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"'; do
-        sleep 3
+        sleep 5
+        # Verificar que Java sigue corriendo
+        kill -0 $APP_PID 2>/dev/null || { echo "[CRaC] ERROR: Java murió"; exit 1; }
     done
     echo "[CRaC] App lista. Calentando JIT..."
 
@@ -32,11 +36,13 @@ else
         curl -sf http://127.0.0.1:8090/productos/laptop-pro-15 > /dev/null 2>&1
         curl -sf http://127.0.0.1:8090/carrito > /dev/null 2>&1
     done
-    echo "[CRaC] Warmup completado. Tomando checkpoint..."
+    echo "[CRaC] Warmup completado. Tomando checkpoint via jcmd (PID=$APP_PID)..."
 
-    # Tomar checkpoint via jcmd (disponible en Zulu CRaC JDK)
+    # Tomar checkpoint usando el PID real de Java
     jcmd $APP_PID JDK.checkpoint
 
     echo "[CRaC] Checkpoint guardado en $CHECKPOINT_DIR"
+    ls -la "$CHECKPOINT_DIR/"
+
     wait $APP_PID
 fi
