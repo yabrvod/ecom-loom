@@ -51,11 +51,24 @@ services:
     image: redis:7-alpine
     container_name: ecommerce-sim-redis
     command: redis-server --maxmemory 64mb --maxmemory-policy allkeys-lru --save ""
-    deploy:
-      resources:
-        limits:
-          cpus: '0.2'
-          memory: 96M
+    networks:
+      - ecommerce-net
+
+  # k6 corre DENTRO de la red Docker — sin latencia de red externa
+  # Igual que server-benchmark.sh en el servidor
+  k6:
+    image: grafana/k6:latest
+    container_name: ecommerce-sim-k6
+    profiles:
+      - benchmark
+    environment:
+      - BASE_URL=http://ecommerce-sim:8090
+      - K6_SCRIPT=${K6_SCRIPT:-k6-ecommerce.js}
+    volumes:
+      - ./loadtest:/loadtest
+    command: run -e BASE_URL=http://ecommerce-sim:8090 /loadtest/${K6_SCRIPT:-k6-ecommerce.js}
+    depends_on:
+      - app
     networks:
       - ecommerce-net
 
