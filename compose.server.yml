@@ -19,14 +19,13 @@ services:
         -XX:MaxGCPauseMillis=100
         -XX:ActiveProcessorCount=1
         -Djava.security.egd=file:/dev/./urandom
+    # Límites reales para Docker standalone (no Swarm)
+    cpus: '1.0'
+    mem_limit: 768m
     networks:
       - ecommerce-network
     ports:
       - "127.0.0.1:9093:8090"
-    deploy:
-      resources:
-        limits:
-          memory: 768M
 
   ecom-db:
     image: postgres:16-alpine
