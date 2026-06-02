@@ -12,6 +12,8 @@ if [ -d "$CHECKPOINT_DIR" ] && [ "$(ls -A $CHECKPOINT_DIR 2>/dev/null)" ]; then
         -Dspring.profiles.active="${SPRING_PROFILES_ACTIVE:-prod}"
 else
     echo "[CRaC] Primer arranque — iniciando app para crear checkpoint..."
+    # Asegurar permisos del volumen montado (puede ser root del host)
+    chmod 777 "$CHECKPOINT_DIR" 2>/dev/null || true
     # Lanzar Java con CRaCCheckpointTo apuntando al volumen
     java $JAVA_OPTS \
         -XX:CRaCCheckpointTo="$CHECKPOINT_DIR" \

@@ -29,8 +29,8 @@ WORKDIR /app
 
 COPY --from=build /workspace/target/*.jar app.jar
 
-# Directorio para el checkpoint (necesita permisos)
-RUN mkdir -p /app/checkpoint && chown -R app:app /app
+# Directorio para el checkpoint — writable por app
+RUN mkdir -p /app/checkpoint && chown -R app:app /app && chmod 777 /app/checkpoint
 USER app
 
 EXPOSE 8090 8091
