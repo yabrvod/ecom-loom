@@ -18,16 +18,14 @@ services:
         -XX:MaxGCPauseMillis=100
         -XX:ActiveProcessorCount=1
         -Djava.security.egd=file:/dev/./urandom
+    # Límites reales para Docker standalone
+    cpus: '1.0'
+    mem_limit: 768m
     ports:
       - "9090:8090"
     depends_on:
       - ecommerce-db
       - ecommerce-redis
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'       # 1 vCPU — igual al servidor
-          memory: 768M      # ~igual al servidor (1024M limit, JVM usa ~512M)
     networks:
       - ecommerce-net
 
