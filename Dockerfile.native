@@ -1,0 +1,43 @@
+# ============================================================================
+# Stage 1: BUILD — GraalVM Native Image
+# Compila Spring Boot a binario nativo en build time.
+# Sin JIT en runtime — arranca en <1s, consume menos CPU bajo carga.
+# ============================================================================
+FROM ghcr.io/graalvm/native-image-community:21 AS build
+
+WORKDIR /workspace
+
+# Maven wrapper o maven standalone
+RUN microdnf install -y maven 2>/dev/null || \
+    (curl -fsSL https://downloads.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz | \
+     tar -xz -C /opt && ln -s /opt/apache-maven-3.9.9/bin/mvn /usr/local/bin/mvn)
+
+# Cache de dependencias
+COPY pom.xml .
+RUN mvn dependency:go-offline -B -Djava.version=21 2>&1 | tail -5
+
+# Compilar a binario nativo
+COPY src ./src
+RUN mvn -Pnative native:compile -DskipTests -B -Djava.version=21 \
+    2>&1 | tail -10
+
+# ============================================================================
+# Stage 2: RUNTIME — imagen mínima
+# El binario nativo no necesita JVM — imagen final ~80MB vs 637MB
+# ============================================================================
+FROM debian:bookworm-slim
+
+RUN addgroup --system app && adduser --system --ingroup app app
+WORKDIR /app
+
+COPY --from=build /workspace/target/spring-ecommerce app
+RUN chown app:app /app/app
+
+USER app
+
+EXPOSE 8090 8091
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"' || exit 1
+
+ENTRYPOINT ["/app/app"]
