@@ -19,26 +19,22 @@ else
 
     APP_PID=$!
 
-    # Esperar que la app arranque
+    # Esperar que la app arranque (usar curl, no wget)
     echo "[CRaC] Esperando arranque..."
-    until wget -qO- http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"'; do
+    until curl -sf http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"'; do
         sleep 3
     done
     echo "[CRaC] App lista. Calentando JIT..."
 
     # Warmup: 50 requests para calentar el JIT
     for i in $(seq 1 50); do
-        wget -qO- http://127.0.0.1:8090/ > /dev/null 2>&1
-        wget -qO- http://127.0.0.1:8090/productos/laptop-pro-15 > /dev/null 2>&1
-        wget -qO- http://127.0.0.1:8090/carrito > /dev/null 2>&1
+        curl -sf http://127.0.0.1:8090/ > /dev/null 2>&1
+        curl -sf http://127.0.0.1:8090/productos/laptop-pro-15 > /dev/null 2>&1
+        curl -sf http://127.0.0.1:8090/carrito > /dev/null 2>&1
     done
     echo "[CRaC] Warmup completado. Tomando checkpoint..."
 
-    # Tomar checkpoint via Spring Actuator
-    wget -qO- --post-data='{"action":"checkpoint"}' \
-        --header='Content-Type: application/json' \
-        http://127.0.0.1:8091/actuator/checkpoint 2>/dev/null || \
-    # Fallback: via jcmd
+    # Tomar checkpoint via jcmd (disponible en Zulu CRaC JDK)
     jcmd $APP_PID JDK.checkpoint
 
     echo "[CRaC] Checkpoint guardado en $CHECKPOINT_DIR"

@@ -21,6 +21,9 @@ RUN mvn package -DskipTests -B -Djava.version=21
 # Stage 2: Runtime con Azul Zulu CRaC JDK 21
 FROM azul/zulu-openjdk:21-jdk-crac
 
+# curl para healthcheck y warmup en entrypoint
+RUN apt-get update -q && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system app && adduser --system --ingroup app app
 WORKDIR /app
 
@@ -34,7 +37,7 @@ EXPOSE 8090 8091
 
 # El healthcheck verifica que la app responde
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-    CMD wget -qO- http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"' || exit 1
+    CMD curl -sf http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"' || exit 1
 
 # Script de entrada que maneja checkpoint/restore
 COPY --chown=app:app scripts/crac-entrypoint.sh /app/entrypoint.sh
