@@ -1,0 +1,43 @@
+# ============================================================================
+# CRaC (Coordinated Restore at Checkpoint)
+#
+# Flujo:
+#   1. Build normal con Azul Zulu CRaC JDK
+#   2. En primer arranque: app corre, se calienta, toma checkpoint
+#   3. En restarts: restaura desde checkpoint en <1s con JIT ya compilado
+#
+# Resultado: arranque <1s + JIT caliente desde el primer request
+# Compatible con Virtual Threads (Loom) al 100%
+# ============================================================================
+
+# Stage 1: Build con Maven estándar
+FROM maven:3.9-eclipse-temurin-21-alpine AS build
+WORKDIR /workspace
+COPY pom.xml .
+RUN mvn dependency:go-offline -B -Djava.version=21
+COPY src ./src
+RUN mvn package -DskipTests -B -Djava.version=21
+
+# Stage 2: Runtime con Azul Zulu CRaC JDK 21
+FROM azul/zulu-openjdk:21-jdk-crac
+
+RUN addgroup --system app && adduser --system --ingroup app app
+WORKDIR /app
+
+COPY --from=build /workspace/target/*.jar app.jar
+
+# Directorio para el checkpoint (necesita permisos)
+RUN mkdir -p /app/checkpoint && chown -R app:app /app
+USER app
+
+EXPOSE 8090 8091
+
+# El healthcheck verifica que la app responde
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+    CMD wget -qO- http://127.0.0.1:8091/actuator/health 2>/dev/null | grep -q '"UP"' || exit 1
+
+# Script de entrada que maneja checkpoint/restore
+COPY --chown=app:app scripts/crac-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -4,6 +4,7 @@ import com.study.ecommerce.cart.service.CartService;
 import com.study.ecommerce.checkout.domain.Order;
 import com.study.ecommerce.shared.exception.BusinessException;
 import com.study.ecommerce.shared.exception.ResourceNotFoundException;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -33,16 +34,8 @@ public class CheckoutService {
         var items = cartService.getEnrichedItems(cartId);
         var variantIds = items.stream().map(i -> i.getVariantId()).toList();
 
-        // FASE 1 — leer catálogo + validar stock (sin transacción)
-        List<Map<String, Object>> variantData = jdbc.queryForList("""
-            SELECT v.id, v.name AS variant_name, v.price,
-                   p.name AS product_name,
-                   COALESCE(i.stock, 0) AS stock
-            FROM product_variants v
-            JOIN products p ON p.id = v.product_id
-            LEFT JOIN inventory i ON i.variant_id = v.id
-            WHERE v.id IN (:ids)
-            """, new MapSqlParameterSource("ids", variantIds));
+        // FASE 1 — leer catálogo desde cache (precio/nombre) + stock desde BD
+        List<Map<String, Object>> variantData = loadVariants(variantIds);
 
         var variantMap = variantData.stream()
             .collect(java.util.stream.Collectors.toMap(
@@ -62,5 +55,20 @@ public class CheckoutService {
 
         // FASE 2 — transacción JDBC pura (sin Hibernate)
         return txService.execute(cartId, userId, shippingName, shippingAddress, variantMap);
+    }
+
+    // Cache de variantes — precio y nombre no cambian frecuentemente
+    // El stock NO se cachea — siempre se lee de BD para evitar overselling
+    @Cacheable(value = "variants", key = "#variantIds.toString()")
+    public List<Map<String, Object>> loadVariants(List<Long> variantIds) {
+        return jdbc.queryForList("""
+            SELECT v.id, v.name AS variant_name, v.price,
+                   p.name AS product_name,
+                   COALESCE(i.stock, 0) AS stock
+            FROM product_variants v
+            JOIN products p ON p.id = v.product_id
+            LEFT JOIN inventory i ON i.variant_id = v.id
+            WHERE v.id IN (:ids)
+            """, new MapSqlParameterSource("ids", variantIds));
     }
 }

@@ -129,6 +129,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- CRaC: Checkpoint/Restore — JVM warm snapshot para restart <1s -->
+        <dependency>
+            <groupId>org.crac</groupId>
+            <artifactId>crac</artifactId>
+            <version>1.5.0</version>
+        </dependency>
+
         <!-- Dev -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

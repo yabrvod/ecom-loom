@@ -3,6 +3,8 @@ WORKDIR /workspace
 COPY pom.xml .
 RUN mvn dependency:go-offline -B -Djava.version=21
 COPY src ./src
+# Spring Boot 3 incluye AOT processing automáticamente en el package estándar
+# Genera código de configuración en build time → menos reflection en runtime
 RUN mvn package -DskipTests -B -Djava.version=21
 
 FROM eclipse-temurin:24-jre-alpine
