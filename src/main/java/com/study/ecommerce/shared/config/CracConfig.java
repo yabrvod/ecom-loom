@@ -33,17 +33,23 @@ public class CracConfig implements Resource {
 
     @Override
     public void beforeCheckpoint(Context<? extends Resource> context) throws Exception {
-        // Cerrar todas las conexiones antes del checkpoint
-        // Evita que el checkpoint guarde sockets inválidos
+        System.out.println("[CRaC] Cerrando pool HikariCP antes del checkpoint...");
+        // Paso 1: soft evict (marca conexiones para cierre)
         dataSource.getHikariPoolMXBean().softEvictConnections();
-        Thread.sleep(500); // Dar tiempo a que se cierren
-        System.out.println("[CRaC] Conexiones BD cerradas antes del checkpoint");
+        Thread.sleep(1000);
+        // Paso 2: reducir pool a 0 — fuerza cierre de todas las conexiones
+        dataSource.setMaximumPoolSize(0);
+        dataSource.setMinimumIdle(0);
+        Thread.sleep(2000);
+        System.out.println("[CRaC] Pool cerrado. Conexiones activas: " +
+            dataSource.getHikariPoolMXBean().getActiveConnections());
     }
 
     @Override
     public void afterRestore(Context<? extends Resource> context) throws Exception {
-        // HikariCP crea nuevas conexiones automáticamente al primer request
-        // Solo log para confirmar que el restore fue exitoso
-        System.out.println("[CRaC] Restore completado — conexiones BD se crearán al primer request");
+        // Restaurar pool con configuración original
+        dataSource.setMaximumPoolSize(30);
+        dataSource.setMinimumIdle(5);
+        System.out.println("[CRaC] Restore completado — pool restaurado, conexiones BD se crearán al primer request");
     }
 }
